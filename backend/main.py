@@ -13,6 +13,7 @@ from typing import AsyncGenerator, Optional, List
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from core.scanner import FontScanner
 from core.processor import ProcessingEngine, ProgressInfo
@@ -65,6 +66,37 @@ async def broadcast_progress(data: dict):
         app.state.ws_clients.remove(ws)
 
 
+# --- Request Models ---
+
+class ScanRequest(BaseModel):
+    folder_path: str
+    include_subfolders: bool = True
+
+
+class ValidateRequest(BaseModel):
+    font_paths: list[str]
+
+
+class RepairRequest(BaseModel):
+    font_path: str
+    output_path: Optional[str] = None
+
+
+class DedupRequest(BaseModel):
+    font_entries: list[dict]
+
+
+class OrganizeRequest(BaseModel):
+    font_entries: list[dict]
+    output_dir: str
+
+
+class ClassifyRequest(BaseModel):
+    font_entries: list[dict]
+
+
+# --- Routes ---
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -78,7 +110,6 @@ async def websocket_progress(websocket: WebSocket):
     app.state.ws_clients.append(websocket)
     try:
         while True:
-            # Keep connection alive
             await websocket.receive_text()
     except Exception:
         if websocket in app.state.ws_clients:
@@ -86,7 +117,7 @@ async def websocket_progress(websocket: WebSocket):
 
 
 @app.post("/scan")
-async def scan_fonts(folder_path: str, include_subfolders: bool = True):
+async def scan_fonts(req: ScanRequest):
     """Scan a folder for font files."""
     scanner: FontScanner = app.state.scanner
 
@@ -99,7 +130,7 @@ async def scan_fonts(folder_path: str, include_subfolders: bool = True):
         }))
 
     scanner.progress_callback = progress_callback
-    results = scanner.scan(folder_path, recursive=include_subfolders)
+    results = scanner.scan(req.folder_path, recursive=req.include_subfolders)
 
     await broadcast_progress({
         "type": "scan_complete",
@@ -115,31 +146,29 @@ async def scan_fonts(folder_path: str, include_subfolders: bool = True):
 
 
 @app.post("/validate")
-async def validate_fonts(font_paths: list[str]):
+async def validate_fonts(req: ValidateRequest):
     """Validate font files for corruption."""
     from core.validator import FontValidator
 
     validator = FontValidator()
-    results = validator.validate_batch(font_paths)
+    results = validator.validate_batch(req.font_paths)
     return {"results": results}
 
 
 @app.post("/repair")
-async def repair_font(font_path: str, output_path: Optional[str] = None):
+async def repair_font(req: RepairRequest):
     """Attempt to repair a corrupted font file."""
     from core.validator import FontValidator
 
     validator = FontValidator()
-    return validator.try_repair(font_path, output_path)
+    return validator.try_repair(req.font_path, req.output_path)
 
 
 @app.post("/deduplicate")
-async def find_duplicates(font_entries: list[dict]):
+async def find_duplicates(req: DedupRequest):
     """Find duplicate fonts."""
     from core.deduplicator import Deduplicator
     from models.font_entry import FontEntry
-    from pathlib import Path
-
     dedup = Deduplicator()
     # Convert dicts to FontEntry objects
     fonts = [
@@ -155,14 +184,14 @@ async def find_duplicates(font_entries: list[dict]):
             glyph_count=f.get("glyph_count", 0),
             version=f.get("version", ""),
         )
-        for f in font_entries
+        for f in req.font_entries
     ]
     groups = dedup.find_duplicates(fonts)
     return {"duplicate_groups": groups}
 
 
 @app.post("/organize")
-async def organize_fonts(font_entries: list[dict], output_dir: str):
+async def organize_fonts(req: OrganizeRequest):
     """Organize fonts into family groups."""
     from core.organizer import FontOrganizer
     from models.font_entry import FontEntry
@@ -180,14 +209,14 @@ async def organize_fonts(font_entries: list[dict], output_dir: str):
             suggested_family=f.get("suggested_family", ""),
             suggested_style=f.get("suggested_style", ""),
         )
-        for f in font_entries
+        for f in req.font_entries
     ]
-    result = organizer.organize(fonts, output_dir)
+    result = organizer.organize(fonts, req.output_dir)
     return result
 
 
 @app.post("/classify")
-async def classify_fonts(font_entries: list[dict]):
+async def classify_fonts(req: ClassifyRequest):
     """Classify fonts using AI (Ollama)."""
     from core.ai_classifier import AIClassifier
     from models.font_entry import FontEntry
@@ -205,7 +234,7 @@ async def classify_fonts(font_entries: list[dict]):
             weight_class=f.get("weight_class", 400),
             glyph_count=f.get("glyph_count", 0),
         )
-        for f in font_entries
+        for f in req.font_entries
     ]
 
     results = classifier.classify_batch(
