@@ -1,0 +1,11 @@
+[package]
+name = "fontforge-pro"
+version = "0.1.0"
+description = "AI-Assisted Font Manager"
+authors = ["FontForge Pro"]
+edition = "2021"
+
+[dependencies]
+tauri = { version = "2.0.0", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
