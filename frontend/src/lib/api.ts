@@ -35,13 +35,16 @@ export async function findDuplicates(fontPaths: string[]) {
   return res.json();
 }
 
-export async function organizeFonts(fontPaths: string[], outputDir: string) {
+export async function organizeFonts(fonts: any[], outputDir: string) {
   const res = await fetch(`${BACKEND_URL}/organize`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ font_paths: fontPaths, output_dir: outputDir }),
+    body: JSON.stringify({ font_entries: fonts, output_dir: outputDir }),
   });
-  if (!res.ok) throw new Error(`Organize failed: ${res.status}`);
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Organize failed: ${res.status} — ${error}`);
+  }
   return res.json();
 }
 
