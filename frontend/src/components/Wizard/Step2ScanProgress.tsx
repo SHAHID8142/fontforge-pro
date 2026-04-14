@@ -35,13 +35,20 @@ export default function Step2ScanProgress({
           // Ignore parse errors
         }
       };
-      ws.onclose = () => setWsConnected(false);
+      ws.onclose = () => {
+        setWsConnected(false);
+      };
+      ws.onerror = () => {
+        // Silently fail — use polling fallback
+      };
     } catch {
       // WebSocket unavailable — use polling fallback
     }
 
     return () => {
-      if (ws) ws.close();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
     };
   }, []);
 

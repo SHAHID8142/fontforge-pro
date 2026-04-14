@@ -119,7 +119,16 @@ async def websocket_progress(websocket: WebSocket):
 @app.post("/scan")
 async def scan_fonts(req: ScanRequest):
     """Scan a folder for font files."""
+    from pathlib import Path
     scanner: FontScanner = app.state.scanner
+
+    folder = Path(req.folder_path).expanduser()
+    if not folder.is_dir():
+        return {
+            "error": f"Folder not found: {folder}",
+            "total": 0,
+            "fonts": [],
+        }
 
     def progress_callback(total: int, found: int):
         asyncio.create_task(broadcast_progress({
@@ -130,7 +139,7 @@ async def scan_fonts(req: ScanRequest):
         }))
 
     scanner.progress_callback = progress_callback
-    results = scanner.scan(req.folder_path, recursive=req.include_subfolders)
+    results = scanner.scan(str(folder), recursive=req.include_subfolders)
 
     await broadcast_progress({
         "type": "scan_complete",

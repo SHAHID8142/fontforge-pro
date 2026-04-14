@@ -21,6 +21,11 @@ export default function Step1SelectFolder({
 
     try {
       const result = await scanFonts(state.folderPath, state.includeSubfolders);
+      if (result.error) {
+        setError(result.error);
+        setState((s: any) => ({ ...s, fonts: [], scanComplete: false, scanError: result.error }));
+        return;
+      }
       setState((s: any) => ({
         ...s,
         fonts: result.fonts || [],
@@ -73,9 +78,9 @@ export default function Step1SelectFolder({
           <p className="text-xs text-dark-400">Quick select:</p>
           <div className="flex flex-wrap gap-2">
             {[
-              { label: "macOS System Fonts", path: "/System/Library/Fonts" },
-              { label: "User Fonts", path: "~/Library/Fonts" },
-              { label: "All User Fonts", path: "/Users/maryam/Library/Fonts" },
+              { label: "🍎 System Fonts", path: "/System/Library/Fonts" },
+              { label: "👤 User Fonts", path: "/Users/maryam/Library/Fonts" },
+              { label: "📂 My All FONT", path: "/Users/maryam/Desktop/My All FONT" },
             ].map((preset) => (
               <button
                 key={preset.path}
